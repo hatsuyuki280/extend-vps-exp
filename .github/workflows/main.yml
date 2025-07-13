@@ -1,21 +1,55 @@
+name: 'Renewalxx'
+
 on:
   schedule:
-    - cron: 0 15 * * *
-  push:
+    - cron: '10 22 * * *'
   workflow_dispatch:
 
 jobs:
   job:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v4
-      - run: sudo apt-get -qq update && sudo apt-get -yqq install --no-install-recommends ffmpeg fonts-noto-cjk
-      - run: yarn add puppeteer
-      - run: node main.mjs
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get -qq update && sudo apt-get -yqq install --no-install-recommends ffmpeg fonts-noto-cjk
+          npm install puppeteer node-fetch
+
+      - name: Restore expire.txt from cache
+        uses: actions/cache@v4
+        with:
+          path: expire.txt
+          key: expire-txt-cache-${{ github.ref }}
+
+      - name: Run Renewal Script
+        run: node main.mjs
         env:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
-      - uses: actions/upload-artifact@v4
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          WEBDAV_URL: ${{ secrets.WEBDAV_URL }}
+          WEBDAV_USERNAME: ${{ secrets.WEBDAV_USERNAME }}
+          WEBDAV_PASSWORD: ${{ secrets.WEBDAV_PASSWORD }}
+          WEBDAV_SAVE_PATH: ${{ secrets.WEBDAV_SAVE_PATH }}
+
+      - name: Ensure expire.txt exists for caching
+        run: touch expire.txt
+
+      - name: Save expire.txt to cache
+        uses: actions/cache@v4
         with:
-          path: recording.webm
+          path: expire.txt
+          key: expire-txt-cache-${{ github.ref }}
+          
+      - name: Delete workflow runs
+        uses: GitRML/delete-workflow-runs@main
+        with:
+          retain_days: '3'
+          keep_minimum_runs: '0'
