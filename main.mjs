@@ -177,7 +177,7 @@ try {
     scriptErrorMessage = `🚨 **VPS 续期脚本执行出错** 🚨\n\n错误信息: \`${e.message}\`\n\n北京时间: ${getBeijingTimeString().replace('_', ' ')}`
 } finally {
     console.log('Script finished. Closing browser and saving recording.')
-    await setTimeout(3000)
+    await setTimeout(5000)
     await recorder.stop()
     await browser.close()
 
