@@ -128,17 +128,17 @@ try {
     await page.locator('#user_password').fill(process.env.PASSWORD)
     await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle2' }),
-        page.click('text=ログインする')
+        page.locator('text=ログインする').click()
     ]);
 
     console.log('Navigating to VPS panel...')
     await page.goto('https://secure.xserver.ne.jp/xapanel/xvps/index', { waitUntil: 'networkidle2' })
 
     console.log('Starting renewal process...')
-    await page.click('.contract__menuIcon')
-    await page.click('text=契約情報')
-    await page.click('text=更新する')
-    await page.click('text=引き続き無料VPSの利用を継続する')
+    await page.locator('.contract__menuIcon').click()
+    await page.locator('text=契約情報').click()
+    await page.locator('text=更新する').click()
+    await page.locator('text=引き続き無料VPSの利用を継続する').click()
     await page.waitForNavigation({ waitUntil: 'networkidle2' })
     
     const notYetTimeMessage = await page.evaluate(() => document.body.innerText.includes('利用期限の1日前から更新手続きが可能です'));
@@ -151,7 +151,7 @@ try {
         // 不立即发送，等待录屏上传后统一通知
     } else {
         console.log('Proceeding with the final renewal step...');
-        await page.click('text=無料VPSの利用を継続する')
+        await page.locator('text=無料VPSの利用を継続する').click()
         await page.waitForNavigation({ waitUntil: 'networkidle2' })
         console.log('Returned to panel after renewal.');
 
