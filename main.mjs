@@ -151,8 +151,8 @@ try {
             renewAvailableDate = match[1];
         }
         const currentExpireDate = await getExpirationDate(page);
-        infoMessage = `🗓️ 未到续费时间\n\n网站提示需要到期前一天才能操作。\n可续期日期: \`${renewAvailableDate || '未知'}\`\n当前到期日: \`${currentExpireDate || '无法获取'}\`\n脚本将安全退出。\n\n北京时间: ${getBeijingTimeString().replace('_'， ' ')}`
-        console。log(infoMessage);
+        infoMessage = `🗓️ 未到续费时间\n\n网站提示需要到期前一天才能操作。\n可续期日期: \`${renewAvailableDate || '未知'}\`\n当前到期日: \`${currentExpireDate || '无法获取'}\`\n脚本将安全退出。\n\n北京时间: ${getBeijingTimeString().replace('_', ' ')}`
+        console.log(infoMessage);
         // 不立即发送，等待录屏上传后统一通知
     } else {
         console.log('Proceeding with the final renewal step...');
