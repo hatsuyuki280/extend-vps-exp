@@ -154,7 +154,6 @@ try {
     // 在契約情報页面，等待表格加载
     await page.waitForSelector('th', {timeout: 10000});
     await setTimeout(5000);
-    console.log('Current page URL:', page.url());
     
     // 只取一次到期日，整个流程复用
     const currentExpireDate = await getExpirationDate(page);
