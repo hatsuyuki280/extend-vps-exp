@@ -72,17 +72,40 @@ async function uploadToWebDAV(localFile, remoteFile) {
 }
 
 /**
- * Fetches the expiration date from the current page.
+ * Fetches the expiration date from the current page, and prints all th/td contents for debugging.
  */
 async function getExpirationDate(page) {
     try {
+        // 调试打印页面所有th及其对应td内容
+        await page.evaluate(() => {
+            const ths = Array.from(document.querySelectorAll('th'));
+            ths.forEach(th => {
+                let td = th.nextElementSibling;
+                // 跳过非td节点
+                while (td && td.tagName !== 'TD') {
+                    td = td.nextElementSibling;
+                }
+                // 打印th和对应td内容
+                console.log(
+                    `[调试] th: "${th.textContent.trim()}", td: "${td ? td.textContent.trim() : '无'}"`
+                );
+            });
+        });
+
+        // 真实提取逻辑
         return await page.evaluate(() => {
             const ths = Array.from(document.querySelectorAll('th'));
             for (const th of ths) {
                 if (th.textContent.trim() === '利用期限') {
-                    const td = th.nextElementSibling;
+                    // 找到对应的 <td>
+                    let td = th.nextElementSibling;
+                    // 防止 nextElementSibling 不是 <td>
+                    while (td && td.tagName !== 'TD') {
+                        td = td.nextElementSibling;
+                    }
                     if (td) {
-                        const match = td.textContent.match(/\d{4}年\d{2}月\d{2}日/);
+                        // 宽松一点的正则
+                        const match = td.textContent.match(/\d{4}年\d{1,2}月\d{1,2}日/);
                         return match ? match[0].trim() : td.textContent.trim();
                     }
                 }
