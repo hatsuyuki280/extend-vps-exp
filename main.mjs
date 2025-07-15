@@ -75,7 +75,6 @@ async function uploadToWebDAV(localFile, remoteFile) {
  * Fetches the expiration date from the current page.
  */
 async function getExpirationDate(page) {
-    // ... (此函数未修改，保持原样)
     try {
         return await page.evaluate(() => {
             const ths = Array.from(document.querySelectorAll('th'));
@@ -140,14 +139,20 @@ try {
     await page.locator('text=更新する').click()
     await page.locator('text=引き続き無料VPSの利用を継続する').click()
     await page.waitForNavigation({ waitUntil: 'networkidle2' })
-    
+
+    // 检查“未到续期时间”并提取可以续费的日期
+    const bodyText = await page.evaluate(() => document.body.innerText);
     const notYetTimeMessage = await page.evaluate(() => document.body.innerText.includes('利用期限の1日前から更新手続きが可能です'));
 
+    let renewAvailableDate = '';
     if (notYetTimeMessage) {
-        console.log('Not yet time for renewal.');
+        const match = bodyText.match(/(\d{4}年\d{1,2}月\d{1,2}日)以降にお試しください/);
+        if (match) {
+            renewAvailableDate = match[1];
+        }
         const currentExpireDate = await getExpirationDate(page);
-        infoMessage = `🗓️ 未到续费时间\n\n网站提示需要到期前一天才能操作。\n当前到期日: \`${currentExpireDate || '无法获取'}\`\n脚本将安全退出。\n\n北京时间: ${getBeijingTimeString().replace('_', ' ')}`;
-        console.log(infoMessage);
+        infoMessage = `🗓️ 未到续费时间\n\n网站提示需要到期前一天才能操作。\n可续期日期: \`${renewAvailableDate || '未知'}\`\n当前到期日: \`${currentExpireDate || '无法获取'}\`\n脚本将安全退出。\n\n北京时间: ${getBeijingTimeString().replace('_'， ' ')}`
+        console。log(infoMessage);
         // 不立即发送，等待录屏上传后统一通知
     } else {
         console.log('Proceeding with the final renewal step...');
