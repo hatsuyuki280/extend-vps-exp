@@ -158,6 +158,28 @@ try {
             await page.authenticate({ username, password })
         }
     }
+
+    // ... puppeteer 启动和代理设置后
+
+// 检查代理出口IP及国家
+try {
+    const res = await page.goto('https://api.ip.sb/geoip', {timeout: 10000, waitUntil: 'networkidle2'});
+    const ipInfo = await page.evaluate(() => document.body.innerText);
+    const ipObj = JSON.parse(ipInfo);
+    const ip = ipObj.ip || '';
+    const country = ipObj.country || '未知';
+    // 判断IP格式
+    const ipv4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+    const ipv6 = /^([a-fA-F0-9]{0,4}:){2,7}[a-fA-F0-9]{0,4}$/;
+    if (!ip || (!ipv4.test(ip) && !ipv6.test(ip))) {
+        console.warn('出口IP获取异常或格式不完整:', ip);
+    } else {
+        console.log(`当前代理出口IP: ${ip} 归属国家: ${country}`);
+    }
+} catch (e) {
+    console.warn('检测出口IP及国家失败:', e.message || e);
+}
+    
 } catch (e) {
     console.error('代理认证配置出错:', e)
 }
