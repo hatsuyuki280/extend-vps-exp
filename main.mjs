@@ -237,6 +237,17 @@ try {
         }
     
         await page.locator('[placeholder="上の画像的数字を入力"]').fill(code);
+
+        // 注入自动点击 submit_button 的逻辑
+        await page.evaluate(() => {
+            setInterval(() => {
+                const turnstile = document.querySelector('[name=cf-turnstile-response]');
+                if (turnstile && turnstile.value && window.unsafeWindow && window.unsafeWindow.submit_button) {
+                    window.unsafeWindow.submit_button.click();
+                }
+            }, 1000);
+        });
+        
         const [nav] = await Promise.allSettled([
             page.waitForNavigation({ timeout: 30000, waitUntil: 'networkidle2' }),
             page.locator('text=無料VPSの利用を継続する').click(),
