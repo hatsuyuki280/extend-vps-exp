@@ -4,6 +4,29 @@ import fs from 'fs'
 import fetch from 'node-fetch'
 
 /**
+ * 格式化中文日期为 yyyy年MM月dd日
+ * 例如：2025年7月7日 => 2025年07月07日
+ */
+function formatChineseDate(dateStr) {
+    const m = dateStr && dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+    if (!m) return dateStr || '未知';
+    const [, y, mo, d] = m;
+    return `${y}年${String(mo).padStart(2, '0')}月${String(d).padStart(2, '0')}日`;
+}
+
+/**
+ * 计算下次可续期日期（到期日前一天）
+ */
+function getNextRenewAvailableDate(chineseDate) {
+    const m = chineseDate.match(/(\d{4})年(\d{2})月(\d{2})日/);
+    if (!m) return '未知';
+    const [_, y, mo, d] = m;
+    const dt = new Date(Number(y), Number(mo) - 1, Number(d));
+    dt.setDate(dt.getDate() - 1); // 前一天
+    return `${dt.getFullYear()}年${String(dt.getMonth() + 1).padStart(2, '0')}月${String(dt.getDate()).padStart(2, '0')}日`;
+}
+
+/**
  * Sends a notification message to a Telegram chat.
  */
 async function sendTelegramMessage(message) {
@@ -81,7 +104,6 @@ async function getExpirationDate(page) {
             const ths = Array.from(document.querySelectorAll('th'));
             ths.forEach(th => {
                 let td = th.nextElementSibling;
-                // 跳过非td节点
                 while (td && td.tagName !== 'TD') {
                     td = td.nextElementSibling;
                 }
@@ -95,7 +117,6 @@ async function getExpirationDate(page) {
 
         for (const item of thTdList) {
             if (item.th === '利用期限') {
-                // 先把td内容所有空白和换行去掉，再匹配
                 const tdStr = item.td.replace(/\s/g, '');
                 const match = tdStr.match(/\d{4}年\d{1,2}月\d{1,2}日/);
                 return match ? match[0] : item.td;
@@ -147,7 +168,7 @@ const recorder = await page.screencast({ path: recordingPath })
 let lastExpireDate = ''
 const expireDateFile = 'expire.txt'
 let infoMessage = ''
-let scriptErrorMessage = '' // 用于存储错误信息
+let scriptErrorMessage = ''
 
 try {
     if (fs.existsSync(expireDateFile)) {
@@ -171,17 +192,70 @@ try {
     await page.locator('text=契約情報').click();
     await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
-    // 在契約情報页面，等待表格加载
     await page.waitForSelector('th', {timeout: 10000});
     await setTimeout(5000);
     
     // 只取一次到期日，整个流程复用
-    const currentExpireDate = await getExpirationDate(page);
+    const currentExpireDateRaw = await getExpirationDate(page);
+    const currentExpireDate = formatChineseDate(currentExpireDateRaw);
 
     await page.locator('text=更新する').click();
+    await setTimeout(3000);
     await page.locator('text=引き続き無料VPSの利用を継続する').click();
     await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
+    // 验证码处理（最多尝试 maxCaptchaTries 次，自动刷新并截图失败）
+    const maxCaptchaTries = 3;
+    let solved = false;
+    
+    for (let attempt = 1; attempt <= maxCaptchaTries; attempt++) {
+        const captchaImg = await page.$('img[src^="data:"]');
+        if (!captchaImg) {
+            console.log('无验证码，跳过验证码填写');
+            fs.writeFileSync('no_captcha.html', await page.content());
+            solved = true;
+            break;
+        }
+    
+        const base64 = await captchaImg.evaluate(img => img.src);
+        let code = '';
+        try {
+            code = await fetch('https://captcha-120546510085.asia-northeast1.run.app', {
+                method: 'POST',
+                body: base64,
+            }).then(r => r.text());
+        } catch (err) {
+            console.warn(`验证码识别接口失败 (第 ${attempt} 次):`, err);
+            await captchaImg.screenshot({ path: `captcha_failed_${attempt}.png` });
+            continue;
+        }
+    
+        if (!code || code.length < 4) {
+            console.warn(`验证码识别失败 (第 ${attempt} 次)`);
+            await captchaImg.screenshot({ path: `captcha_failed_${attempt}.png` });
+            continue;
+        }
+    
+        await page.locator('[placeholder="上の画像的数字を入力"]').fill(code);
+        const [nav] = await Promise.allSettled([
+            page.waitForNavigation({ timeout: 30000, waitUntil: 'networkidle2' }),
+            page.locator('text=無料VPSの利用を継続する').click(),
+        ]);
+    
+        if (nav.status === 'fulfilled') {
+            console.log(`验证码尝试成功 (第 ${attempt} 次)`);
+            solved = true;
+            break;
+        }
+    
+        console.warn(`验证码尝试失败 (第 ${attempt} 次)，刷新重试...`);
+        await page.reload({ waitUntil: 'networkidle2', timeout: 30000 });
+    }
+    
+    if (!solved) {
+        throw new Error('验证码识别失败：尝试多次未成功');
+    }
+    
     const bodyText = await page.evaluate(() => document.body.innerText);
     const notYetTimeMessage = bodyText.includes('利用期限の1日前から更新手続きが可能です');
 
@@ -189,10 +263,9 @@ try {
     if (notYetTimeMessage) {
         const match = bodyText.match(/(\d{4}年\d{1,2}月\d{1,2}日)以降にお試しください/);
         if (match) {
-            renewAvailableDate = match[1];
+            renewAvailableDate = formatChineseDate(match[1]);
         }
-        // 只用已保存的 currentExpireDate，不再重复获取
-        infoMessage = `🗓️ 未到续费时间\n\n网站提示需要到期前一天才能操作。\n可续期日期: \`${renewAvailableDate || '未知'}\`\n当前到期日: \`${currentExpireDate || '无法获取'}\`\n脚本将安全退出。\n\n北京时间: ${getBeijingTimeString()}`
+        infoMessage = `🗓️ 未到续费时间\n\n网站提示需要到期前一天才能操作。\n可续期日期: \`${renewAvailableDate || '未知'}\`\n当前到期日: \`${currentExpireDate || '未知'}\`\n\n北京时间: ${getBeijingTimeString()}`;
         console.log(infoMessage);
         // 不立即发送，等待录屏上传后统一通知
     } else {
@@ -201,11 +274,25 @@ try {
         await page.waitForNavigation({ waitUntil: 'networkidle2' })
         console.log('Returned to panel after renewal.');
 
-        const newExpireDate = await getExpirationDate(page);
-        console.log(`Found expiration date: ${newExpireDate || 'Not Found'}`);
+        // 续期后，回到契约信息页面（通过点击菜单）
+        await page.goto('https://secure.xserver.ne.jp/xapanel/xvps/index', { waitUntil: 'networkidle2' });
+        await page.locator('.contract__menuIcon').click();
+        await page.locator('text=契約情報').click();
+        await page.waitForNavigation({ waitUntil: 'networkidle2' });
+        await page.waitForSelector('th', {timeout: 10000});
+        await setTimeout(3000); // 稍作等待
+        const newExpireDateRaw = await getExpirationDate(page);
+        const newExpireDate = formatChineseDate(newExpireDateRaw);
 
-        if (newExpireDate && newExpireDate !== lastExpireDate) {
-            const successMessage = `🎉 VPS 续费成功！\n\n- 新到期日: \`${newExpireDate}\`\n- 上次到期日: \`${lastExpireDate || '首次检测'}\`\n\n北京时间: ${getBeijingTimeString()}`
+        const nextRenewDate = getNextRenewAvailableDate(newExpireDate);
+
+        if (newExpireDate && newExpireDate !== formatChineseDate(lastExpireDate)) {
+            const successMessage = `🎉 VPS 续费成功！
+
+- 新到期日: \`${newExpireDate || '无'}\`
+- 下次可续期日期: \`${nextRenewDate}\`
+
+北京时间: ${getBeijingTimeString()}`
             console.log(successMessage)
             infoMessage = successMessage;
             fs.writeFileSync(expireDateFile, newExpireDate)
