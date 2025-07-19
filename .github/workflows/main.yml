@@ -6,8 +6,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  job:
+  Renewal:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +19,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          sudo apt-get -qq update && sudo apt-get -yqq install --no-install-recommends ffmpeg fonts-noto-cjk
+          sudo apt-get -qq update && sudo apt-get -yqq install --no-install-recommends curl ffmpeg fonts-noto-cjk
           npm install puppeteer node-fetch
 
       - name: Restore expire.txt from cache
