@@ -2,7 +2,7 @@ name: 'Renewalxx'
 
 on:
   schedule:
-    - cron: '20 */12 * * *'
+    - cron: '20 21 * * *'
   workflow_dispatch:
 
 jobs:
